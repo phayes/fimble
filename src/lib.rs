@@ -19,34 +19,16 @@ use std::os::unix::fs::PermissionsExt;
 #[cfg(not(windows))]
 use std::os::unix::fs::FileTypeExt;
 
-pub struct Config {}
+pub struct Scanner {}
 
-pub struct Scanner {
-    pub config: Config,
+pub struct Manifest {
+    pub digest: Hash,
+    pub bloom: GrowableBloom,
 }
 
 impl Scanner {
     pub fn new() -> Self {
-        Scanner { config: Config {} }
-    }
-
-    pub fn build_manifest<P: AsRef<Path>>(&self, root: P) -> Result<GrowableBloom, Error> {
-        let walker = WalkDir::new(root).sort(true).preload_metadata(true);
-        let mut hasher = blake3::Hasher::new();
-        let mut checkpoints = Vec::new();
-        for entry in walker {
-            let entry: jwalk::DirEntry = entry?;
-            self.hash_entry(entry, &mut hasher)?;
-
-            checkpoints.push(hasher.clone().finalize());
-        }
-
-        let mut bloom = GrowableBloom::new(0.00001, checkpoints.len());
-        for checkpoint in checkpoints.into_iter() {
-            bloom.insert(&checkpoint);
-        }
-
-        Ok(bloom)
+        Scanner {}
     }
 
     pub fn scan<P: AsRef<Path>>(&self, root: P) -> Result<Hash, Error> {
@@ -58,6 +40,54 @@ impl Scanner {
         }
 
         Ok(hasher.finalize())
+    }
+
+    pub fn build_manifest<P: AsRef<Path>>(&self, root: P) -> Result<Manifest, Error> {
+        let walker = WalkDir::new(root).sort(true).preload_metadata(true);
+        let mut hasher = blake3::Hasher::new();
+        let mut checkpoints = Vec::new();
+        for entry in walker {
+            let entry: jwalk::DirEntry = entry?;
+            self.hash_entry(entry, &mut hasher)?;
+
+            checkpoints.push(hasher.clone().finalize());
+        }
+
+        let mut bloom = GrowableBloom::new(0.00001, checkpoints.len());
+        for checkpoint in checkpoints {
+            bloom.insert(checkpoint);
+        }
+
+        let digest = hasher.finalize();
+
+        Ok(Manifest { digest, bloom })
+    }
+
+    pub fn check_manifest<P: AsRef<Path>>(
+        &self,
+        root: P,
+        manifest: &Manifest,
+    ) -> Result<(), Error> {
+        let walker = WalkDir::new(root).sort(true).preload_metadata(true);
+        let mut hasher = blake3::Hasher::new();
+        for entry in walker {
+            let entry: jwalk::DirEntry = entry?;
+            let filename = &entry.file_name.to_string_lossy().into_owned();
+
+            self.hash_entry(entry, &mut hasher)?;
+
+            let checkpoint = hasher.clone().finalize();
+
+            if !manifest.bloom.contains(&checkpoint) {
+                dbg!("Error on file: {}", filename);
+            }
+        }
+
+        let digest = hasher.finalize();
+
+        if !&digest.eq(&manifest.digest) {}
+
+        Ok(())
     }
 
     // TODO: filename in error
@@ -77,7 +107,9 @@ impl Scanner {
         let path: PathBuf = parent_spec.path.join(&file_name);
 
         // Unwrap the metadata
-        let metadata = metadata.expect("Cannot fetch file metadata")?;
+        let metadata = metadata
+            .expect("Cannot fetch file metadata")
+            .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
 
         // Update the hash as per the filetype
         let filetype = metadata.file_type();
@@ -131,10 +163,13 @@ impl Scanner {
 
         // If it's a file or a symlink, hash it's contents
         if filetype.is_file() {
-            let file = File::open(&path)?;
+            let file = File::open(&path)
+                .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
             let mut buf_reader = BufReader::new(file);
 
-            let buffer = buf_reader.fill_buf()?;
+            let buffer = buf_reader
+                .fill_buf()
+                .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
             hasher.update(&buffer);
             let len = buffer.len();
             buf_reader.consume(len);
@@ -142,12 +177,14 @@ impl Scanner {
 
         // If it's a symlink, hash it's target
         if filetype.is_symlink() {
-            let link = std::fs::read_link(&path)?;
+            let link = std::fs::read_link(&path)
+                .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
             hasher.update(link.as_os_str().to_bytes().as_ref());
         }
 
         // Finally update the hash with the filename
-        hasher.update(path.into_os_string().to_bytes().as_ref());
+        let os_path = path.into_os_string();
+        hasher.update(&os_path.to_bytes());
 
         Ok(())
     }
@@ -155,13 +192,16 @@ impl Scanner {
 
 #[derive(Debug, Fail)]
 pub enum Error {
-    #[fail(display = "io error: {}", 0)]
-    IOError(std::io::Error),
+    #[fail(display = "<unknown path>: io error: {}", 0)]
+    IoErr(std::io::Error),
+
+    #[fail(display = "{}: io error: {}", 1, 0)]
+    EntryErr(std::io::Error, String),
 }
 
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
-        Error::IOError(error)
+        Error::IoErr(error)
     }
 }
 

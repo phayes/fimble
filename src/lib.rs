@@ -2,6 +2,7 @@
 extern crate failure;
 
 use blake3::{Hash, Hasher};
+use growable_bloom_filter::GrowableBloom;
 use jwalk::{DirEntry, WalkDir};
 use os_str_bytes::OsStrBytes;
 use std::fs::File;
@@ -29,6 +30,25 @@ impl Scanner {
         Scanner { config: Config {} }
     }
 
+    pub fn build_manifest<P: AsRef<Path>>(&self, root: P) -> Result<GrowableBloom, Error> {
+        let walker = WalkDir::new(root).sort(true).preload_metadata(true);
+        let mut hasher = blake3::Hasher::new();
+        let mut checkpoints = Vec::new();
+        for entry in walker {
+            let entry: jwalk::DirEntry = entry?;
+            self.hash_entry(entry, &mut hasher)?;
+
+            checkpoints.push(hasher.clone().finalize());
+        }
+
+        let mut bloom = GrowableBloom::new(0.00001, checkpoints.len());
+        for checkpoint in checkpoints.into_iter() {
+            bloom.insert(&checkpoint);
+        }
+
+        Ok(bloom)
+    }
+
     pub fn scan<P: AsRef<Path>>(&self, root: P) -> Result<Hash, Error> {
         let walker = WalkDir::new(root).sort(true).preload_metadata(true);
         let mut hasher = blake3::Hasher::new();
@@ -40,6 +60,7 @@ impl Scanner {
         Ok(hasher.finalize())
     }
 
+    // TODO: filename in error
     fn hash_entry(&self, entry: DirEntry, hasher: &mut Hasher) -> Result<(), Error> {
         // Destructure the the entry
         let DirEntry {

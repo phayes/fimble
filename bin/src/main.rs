@@ -1,4 +1,5 @@
 use clap::{App, Arg, SubCommand};
+use libflate::gzip::{Decoder, Encoder};
 use std::fs::File;
 use std::io;
 use std::io::prelude::*;
@@ -75,7 +76,12 @@ pub fn main() {
             std::process::exit(1)
         });
 
-        let encoded = rmp_serde::to_vec(&manifest).expect("Error encoding manifest file");
+        let serialized = rmp_serde::to_vec(&manifest).expect("Error encoding manifest file");
+
+        let mut buffer = Vec::new();
+        let mut gzip_encoder = Encoder::new(&mut buffer).unwrap();
+        gzip_encoder.write_all(&serialized).unwrap();
+        let encoded = gzip_encoder.finish().into_result().unwrap();
 
         io::stdout().write_all(&encoded).unwrap_or_else(|e| {
             eprintln!("Error writing manifest file: {}", e);
@@ -91,8 +97,10 @@ pub fn main() {
             eprintln!("Error opening manifest file: {}", e);
             std::process::exit(1)
         });
+
+        let mut gzip_decoder = Decoder::new(&mut f).unwrap();
         let mut buffer = Vec::new();
-        f.read_to_end(&mut buffer).unwrap_or_else(|e| {
+        gzip_decoder.read_to_end(&mut buffer).unwrap_or_else(|e| {
             eprintln!("Error reading manifest file: {}", e);
             std::process::exit(1)
         });
@@ -104,6 +112,17 @@ pub fn main() {
 
         println!("path:   {}", &manifest.path);
         println!("digest: {}", hex::encode(&manifest.digest));
+        println!("files:");
+
+        // Print files in sort order
+        let mut files = Vec::with_capacity(manifest.files.len());
+        for (k, v) in manifest.files.into_iter() {
+            files.push((k, v));
+        }
+        files.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap());
+        for (k, v) in files.into_iter() {
+            println!("    {}: {}", hex::encode(v), k.to_string_lossy());
+        }
     }
 
     // check-manifest

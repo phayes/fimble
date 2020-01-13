@@ -23,8 +23,6 @@ mod filehash;
 pub struct Manifest {
     pub path: String,
     pub digest: [u8; 32],
-
-    #[serde(with = "as_vec")]
     pub files: HashMap<PathBuf, [u8; 32]>,
 }
 
@@ -234,33 +232,6 @@ pub enum Error {
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
         Error::IoErr(error)
-    }
-}
-
-// Serialize a hashmap as a vec for compactness
-mod as_vec {
-    use std::collections::HashMap;
-    use std::path::PathBuf;
-
-    use serde::de::{Deserialize, Deserializer};
-    use serde::ser::Serializer;
-
-    pub fn serialize<S>(map: &HashMap<PathBuf, [u8; 32]>, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.collect_seq(map.iter())
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<PathBuf, [u8; 32]>, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let mut map = HashMap::new();
-        for (k, v) in Vec::<(PathBuf, [u8; 32])>::deserialize(deserializer)? {
-            map.insert(k, v);
-        }
-        Ok(map)
     }
 }
 

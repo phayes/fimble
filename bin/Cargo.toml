@@ -11,7 +11,8 @@ clap = "2.33.0"
 rmp-serde = "0.14.0"
 hex = "0.4.0"
 fimble = { path="../lib" }
-
+libflate = "0.1"
+ 
 [[bin]]
 name = "fimble"
 path = "src/main.rs"  

@@ -29,7 +29,7 @@ fimble check-manifest known_good.fimble_manifest
 
 ## How it works
 
-Fimble works by computing the [blake3](https://github.com/BLAKE3-team/BLAKE3) cryptographic hash of the specified directories. This is very fast and is done with very little overhead. 
+Fimble works by computing the [blake3](https://github.com/BLAKE3-team/BLAKE3) cryptographic hash of the specified directories.
 
 To create a manifest, fimble creates a space-efficient bloom-filter. This is fairly expensive, but the resulting manifest is small and easy to pass around or check into version control.
 

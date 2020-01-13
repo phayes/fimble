@@ -57,7 +57,10 @@ pub fn main() {
         let path = matches.value_of("PATH").unwrap();
 
         let scanner = fimble::Scanner::new();
-        let digest = scanner.scan(&path).unwrap(); // TODO unwrap
+        let digest = scanner.scan(&path).unwrap_or_else(|e| {
+            eprintln!("Error scanning directory: {}", e);
+            std::process::exit(1)
+        });
 
         println!("{}", digest.to_hex());
     }
@@ -67,22 +70,37 @@ pub fn main() {
         let path = matches.value_of("PATH").unwrap();
 
         let scanner = fimble::Scanner::new();
-        let manifest = scanner.build_manifest(&path).unwrap(); // TODO unwrap
+        let manifest = scanner.build_manifest(&path).unwrap_or_else(|e| {
+            eprintln!("Error scanning directory: {}", e);
+            std::process::exit(1)
+        });
 
-        let encoded = rmp_serde::to_vec(&manifest).unwrap(); // TODO unwrap
+        let encoded = rmp_serde::to_vec(&manifest).expect("Error encoding manifest file");
 
-        io::stdout().write_all(&encoded).unwrap(); // TODO unwrap
+        io::stdout().write_all(&encoded).unwrap_or_else(|e| {
+            eprintln!("Error writing manifest file: {}", e);
+            std::process::exit(1)
+        });
     }
 
     // view-manifest
     if let Some(matches) = matches.subcommand_matches("view-manifest") {
         let path = matches.value_of("MANIFEST-PATH").unwrap();
 
-        let mut f = File::open(path).unwrap(); // TODO unwrap
+        let mut f = File::open(path).unwrap_or_else(|e| {
+            eprintln!("Error opening manifest file: {}", e);
+            std::process::exit(1)
+        });
         let mut buffer = Vec::new();
-        f.read_to_end(&mut buffer).unwrap(); // TOOD unwrap
+        f.read_to_end(&mut buffer).unwrap_or_else(|e| {
+            eprintln!("Error reading manifest file: {}", e);
+            std::process::exit(1)
+        });
 
-        let manifest: fimble::Manifest = rmp_serde::from_read_ref(&buffer).unwrap();
+        let manifest: fimble::Manifest = rmp_serde::from_read_ref(&buffer).unwrap_or_else(|e| {
+            eprintln!("Error reading manifest file: {}", e);
+            std::process::exit(1)
+        });
 
         println!("path:   {}", &manifest.path);
         println!("digest: {}", hex::encode(&manifest.digest));
@@ -92,20 +110,36 @@ pub fn main() {
     if let Some(matches) = matches.subcommand_matches("check-manifest") {
         let path = matches.value_of("MANIFEST-PATH").unwrap();
 
-        let mut f = File::open(path).unwrap(); // TODO unwrap
+        let mut f = File::open(path).unwrap_or_else(|e| {
+            eprintln!("Error opening manifest file: {}", e);
+            std::process::exit(1)
+        });
         let mut buffer = Vec::new();
-        f.read_to_end(&mut buffer).unwrap(); // TOOD unwrap
+        f.read_to_end(&mut buffer).unwrap_or_else(|e| {
+            eprintln!("Error reading manifest file: {}", e);
+            std::process::exit(1)
+        });
 
-        let manifest: fimble::Manifest = rmp_serde::from_read_ref(&buffer).unwrap();
+        let manifest: fimble::Manifest = rmp_serde::from_read_ref(&buffer).unwrap_or_else(|e| {
+            eprintln!("Error reading manifest file: {}", e);
+            std::process::exit(1)
+        });
 
         match manifest.quick_check() {
             Ok(_) => std::process::exit(0),
             Err(e) => {
-                println!("{}", e);
+                eprintln!("{}", e);
                 match manifest.scan_check() {
-                    Ok(_) => unreachable!(),
+                    Ok(changed) => {
+                        if changed.len() != 0 {
+                            for file in changed.into_iter() {
+                                println!("{}", file.to_string_lossy());
+                            }
+                            std::process::exit(1)
+                        }
+                    }
                     Err(e) => {
-                        println!("{}", e);
+                        eprintln!("{}", e);
                         std::process::exit(1)
                     }
                 }

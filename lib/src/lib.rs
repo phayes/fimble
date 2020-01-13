@@ -36,21 +36,17 @@ impl Manifest {
     }
 
     pub fn quick_check(&self) -> Result<(), Error> {
-        let walker = WalkDir::new(&self.path).sort(true).preload_metadata(true);
-        let mut hasher = blake3::Hasher::new();
-        for entry in walker {
-            let entry: jwalk::DirEntry = entry?;
-            hash_entry(entry, &mut hasher)?;
-        }
-
-        let digest = hasher.finalize();
+        let scanner = Scanner::new();
+        let digest = scanner.scan(&self.path)?;
         self.check_hash(&digest)
     }
 
-    pub fn scan_check(&self) -> Result<(), Error> {
+    /// Returns a list of files that have changed.
+    pub fn scan_check(&self) -> Result<Vec<PathBuf>, Error> {
         let walker = WalkDir::new(&self.path).sort(true).preload_metadata(true);
         let base_hasher = blake3::Hasher::new();
         let mut seen = HashSet::with_capacity(self.files.len());
+        let mut files_changed = Vec::new();
         for entry in walker {
             let entry: jwalk::DirEntry = entry?;
             let path = entry.path();
@@ -62,23 +58,22 @@ impl Manifest {
             let existing_digest = self.files.get(&path);
             match existing_digest {
                 Some(existing_digest) => {
+                    seen.insert(path.clone());
                     if !file_digest.as_bytes().eq(existing_digest) {
-                        return Err(Error::ManifestCheckFileFailed(
-                            path.to_string_lossy().into_owned(),
-                            path,
-                        ));
+                        files_changed.push(path)
                     }
-                    seen.insert(path);
                 }
-                None => {
-                    return Err(Error::ManifestCheckFileFailed(
-                        path.to_string_lossy().into_owned(),
-                        path,
-                    ));
-                }
+                None => files_changed.push(path),
             };
         }
-        Ok(())
+
+        for path in self.files.keys() {
+            if !seen.contains(path) {
+                files_changed.push(path.clone())
+            }
+        }
+
+        Ok(files_changed)
     }
 }
 
@@ -91,23 +86,17 @@ impl Scanner {
 
     pub fn scan<P: AsRef<Path>>(&self, root: P) -> Result<Hash, Error> {
         let walker = WalkDir::new(root).sort(true).preload_metadata(true);
-        let mut hasher = blake3::Hasher::new();
+        let base_hasher = blake3::Hasher::new();
+        let mut master_hasher = blake3::Hasher::new();
+
         for entry in walker {
             let entry: jwalk::DirEntry = entry?;
-            hash_entry(entry, &mut hasher)?;
+            let mut file_hasher = base_hasher.clone();
+            hash_entry(entry, &mut file_hasher)?;
+            master_hasher.update(file_hasher.finalize().as_bytes());
         }
 
-        Ok(hasher.finalize())
-    }
-
-    pub fn scan_multiple<P: AsRef<Path>>(&self, roots: &[P]) -> Result<Hash, Error> {
-        let mut hasher = blake3::Hasher::new();
-        for path in roots {
-            let digest = self.scan(path)?;
-            hasher.update(digest.as_bytes());
-        }
-
-        Ok(hasher.finalize())
+        Ok(master_hasher.finalize())
     }
 
     pub fn build_manifest<P: AsRef<Path>>(&self, root: P) -> Result<Manifest, Error> {
@@ -124,7 +113,9 @@ impl Scanner {
             let mut file_hasher = base_hasher.clone();
             hash_entry(entry, &mut file_hasher)?;
 
-            files.insert(path, file_hasher.finalize().as_bytes().to_owned());
+            let file_digest = file_hasher.finalize().as_bytes().to_owned();
+            master_hasher.update(&file_digest);
+            files.insert(path, file_digest);
         }
 
         let master_digest = master_hasher.finalize();
@@ -236,9 +227,6 @@ pub enum Error {
 
     #[fail(display = "Manifest file integrity check failed - something has changed")]
     ManifestCheckFail,
-
-    #[fail(display = "File failed verification: {}", 0)]
-    ManifestCheckFileFailed(String, PathBuf),
 }
 
 impl From<std::io::Error> for Error {

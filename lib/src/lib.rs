@@ -6,9 +6,6 @@ use growable_bloom_filter::GrowableBloom;
 use jwalk::{DirEntry, WalkDir};
 use os_str_bytes::OsStrBytes;
 use serde::{Deserialize, Serialize};
-use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufReader;
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -19,6 +16,8 @@ use std::os::unix::fs::PermissionsExt;
 
 #[cfg(not(windows))]
 use std::os::unix::fs::FileTypeExt;
+
+mod filehash;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
@@ -198,18 +197,9 @@ fn hash_entry(entry: DirEntry, hasher: &mut Hasher) -> Result<(), Error> {
         hasher.update(&bytes);
     }
 
-    // If it's a file or a symlink, hash it's contents
+    // If it's a file, hash it's contents
     if filetype.is_file() {
-        let file =
-            File::open(&path).map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
-        let mut buf_reader = BufReader::new(file);
-
-        let buffer = buf_reader
-            .fill_buf()
-            .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
-        hasher.update(&buffer);
-        let len = buffer.len();
-        buf_reader.consume(len);
+        filehash::hash_file(hasher, &path, &metadata)?;
     }
 
     // If it's a symlink, hash it's target

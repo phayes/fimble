@@ -34,9 +34,8 @@ Fimble works by computing the [blake3](https://github.com/BLAKE3-team/BLAKE3) cr
 To create a manifest, fimble creates a space-efficient bloom-filter. This is fairly expensive, but the resulting manifest is small and easy to pass around or check into version control.
 
 To check the current status of a system, fimble takes a two step process:
-  1. First fimble does a quick-check, computing the blake3 digest of the system and checking this against the master digest in the manifest.
-  2. If no mismatch is found, then we know the system is unaltered and we are done.
-  3. If there is a mismatch, fimble utilizes the bloom-filter in the manifest to pinpoint the location of the difference.
+  1. First fimble does a quick-check, computing the blake3 digest of the system and checking this against the master digest in the manifest. If no digest mismatch is found, then we know the system is unaltered and we are done.
+  2. If there is a mismatch, fimble utilizes the bloom-filter in the manifest to pinpoint the location of the difference.
   
 ## Caveats
 

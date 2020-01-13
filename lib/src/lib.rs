@@ -114,7 +114,7 @@ impl Scanner {
             checkpoints.push(hasher.clone().finalize());
         }
 
-        let mut bloom = GrowableBloom::new(0.00001, checkpoints.len());
+        let mut bloom = GrowableBloom::new(0.001, checkpoints.len());
         for checkpoint in checkpoints {
             bloom.insert(checkpoint);
         }

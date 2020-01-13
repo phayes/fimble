@@ -31,10 +31,7 @@ fn hash_reader(hasher: &mut blake3::Hasher, mut reader: impl Read) -> Result<(),
 
 fn maybe_memmap_file(file: &File, metadata: &Metadata) -> Result<Option<memmap::Mmap>, io::Error> {
     let file_size = metadata.len();
-    Ok(if !metadata.is_file() {
-        // Not a real file.
-        None
-    } else if file_size > isize::max_value() as u64 {
+    Ok(if file_size > isize::max_value() as u64 {
         // Too long to safely map.
         // https://github.com/danburkert/memmap-rs/issues/69
         None

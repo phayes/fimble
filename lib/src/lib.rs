@@ -149,8 +149,21 @@ fn hash_entry(entry: DirEntry, hasher: &mut Hasher) -> Result<(), Error> {
         .expect("Cannot fetch file metadata")
         .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
 
-    // Update the hash as per the filetype
+    // Grab the type of file
     let filetype = metadata.file_type();
+
+    // If it's a file, hash it's contents
+    if filetype.is_file() {
+        filehash::hash_file(hasher, &path, &metadata)?;
+    }
+    // If it's a symlink, hash it's target
+    else if filetype.is_symlink() {
+        let link = std::fs::read_link(&path)
+            .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
+        hasher.update(link.as_os_str().to_bytes().as_ref());
+    }
+
+    // Record the filetype in the hasher
     if filetype.is_dir() {
         hasher.update(&[0]);
     } else if filetype.is_symlink() {
@@ -195,18 +208,6 @@ fn hash_entry(entry: DirEntry, hasher: &mut Hasher) -> Result<(), Error> {
         let permissions = metadata.permissions();
         let bytes: [u8; 4] = unsafe { transmute(permissions.mode().to_be()) };
         hasher.update(&bytes);
-    }
-
-    // If it's a file, hash it's contents
-    if filetype.is_file() {
-        filehash::hash_file(hasher, &path, &metadata)?;
-    }
-
-    // If it's a symlink, hash it's target
-    if filetype.is_symlink() {
-        let link = std::fs::read_link(&path)
-            .map_err(|e| Error::EntryErr(e, format!("{}", &path.display())))?;
-        hasher.update(link.as_os_str().to_bytes().as_ref());
     }
 
     // Finally update the hash with the filename

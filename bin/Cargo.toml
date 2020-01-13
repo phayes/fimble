@@ -1,0 +1,15 @@
+[package]
+name = "fimble-bin"
+version = "1.0.0"
+authors = ["phayes <patrick.d.hayes@gmail.com>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+clap = "2.33.0"
+fimble = { path="../lib" }
+
+[[bin]]
+name = "fimble"
+path = "src/main.rs"

@@ -2,7 +2,7 @@
 
 WORK IN PROGRESS
 
-Simple command-line cryptographically-secure [File Integrity Monitoring](https://en.wikipedia.org/wiki/File_integrity_monitoring)
+Command-line cryptographically-secure [File Integrity Monitoring](https://en.wikipedia.org/wiki/File_integrity_monitoring)
 
 Fimble lets you ensure the integrity of key files and directories to ensure that they haven't changed. It does this by computing a cryptographically secure digest of a known good state, then comparing the current state against this known good state. 
 

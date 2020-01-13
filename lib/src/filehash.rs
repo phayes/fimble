@@ -10,17 +10,11 @@ pub(crate) fn hash_file(
     metadata: &Metadata,
 ) -> Result<(), io::Error> {
     let file = File::open(filepath)?;
-    match maybe_hash_memmap(hasher, &file, metadata)? {
-        true => {
-            // The fast path, already done
-            Ok(())
-        }
-        false => {
-            // the slow path
-            hash_reader(hasher, file)?;
-            Ok(())
-        }
+    if !maybe_hash_memmap(hasher, &file, metadata)? {
+        // The fast-path didn't go, do it via the slow-path
+        hash_reader(hasher, file)?;
     }
+    Ok(())
 }
 
 // The slow path, for inputs that we can't memmap.

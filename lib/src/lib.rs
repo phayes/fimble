@@ -2,10 +2,10 @@
 extern crate failure;
 
 use blake3::{Hash, Hasher};
-use growable_bloom_filter::GrowableBloom;
 use jwalk::{DirEntry, WalkDir};
 use os_str_bytes::OsStrBytes;
 use serde::{Deserialize, Serialize};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -23,7 +23,7 @@ mod filehash;
 pub struct Manifest {
     pub path: String,
     pub digest: [u8; 32],
-    pub bloom: GrowableBloom,
+    pub files: HashMap<PathBuf, [u8; 32]>,
 }
 
 impl Manifest {
@@ -49,25 +49,35 @@ impl Manifest {
 
     pub fn scan_check(&self) -> Result<(), Error> {
         let walker = WalkDir::new(&self.path).sort(true).preload_metadata(true);
-        let mut hasher = blake3::Hasher::new();
+        let base_hasher = blake3::Hasher::new();
+        let mut seen = HashSet::with_capacity(self.files.len());
         for entry in walker {
             let entry: jwalk::DirEntry = entry?;
-            let filename = &entry.file_name.to_string_lossy().into_owned();
+            let path = entry.path();
 
-            hash_entry(entry, &mut hasher)?;
+            let mut file_hasher = base_hasher.clone();
+            hash_entry(entry, &mut file_hasher)?;
+            let file_digest = file_hasher.finalize();
 
-            let checkpoint = hasher.clone().finalize();
-
-            if !self.bloom.contains(&checkpoint) {
-                dbg!("Error on file: {}", filename);
-                return Err(Error::ManifestCheckFail);
-            }
+            let existing_digest = self.files.get(&path);
+            match existing_digest {
+                Some(existing_digest) => {
+                    if !file_digest.as_bytes().eq(existing_digest) {
+                        return Err(Error::ManifestCheckFileFailed(
+                            path.to_string_lossy().into_owned(),
+                            path,
+                        ));
+                    }
+                    seen.insert(path);
+                }
+                None => {
+                    return Err(Error::ManifestCheckFileFailed(
+                        path.to_string_lossy().into_owned(),
+                        path,
+                    ));
+                }
+            };
         }
-
-        let digest = hasher.finalize();
-
-        if !&digest.eq(&self.digest) {}
-
         Ok(())
     }
 }
@@ -104,26 +114,25 @@ impl Scanner {
         let walker = WalkDir::new(root.as_ref())
             .sort(true)
             .preload_metadata(true);
-        let mut hasher = blake3::Hasher::new();
-        let mut checkpoints = Vec::new();
+        let base_hasher = blake3::Hasher::new();
+        let mut master_hasher = base_hasher.clone();
+        let mut files = HashMap::<PathBuf, [u8; 32]>::new();
         for entry in walker {
             let entry: jwalk::DirEntry = entry?;
-            hash_entry(entry, &mut hasher)?;
+            let path = entry.path();
 
-            checkpoints.push(hasher.clone().finalize());
+            let mut file_hasher = base_hasher.clone();
+            hash_entry(entry, &mut file_hasher)?;
+
+            files.insert(path, file_hasher.finalize().as_bytes().to_owned());
         }
 
-        let mut bloom = GrowableBloom::new(0.001, checkpoints.len());
-        for checkpoint in checkpoints {
-            bloom.insert(checkpoint);
-        }
-
-        let digest = hasher.finalize();
+        let master_digest = master_hasher.finalize();
 
         Ok(Manifest {
             path: format!("{}", root.as_ref().display()),
-            digest: digest.as_bytes().to_owned(),
-            bloom,
+            digest: master_digest.as_bytes().to_owned(),
+            files,
         })
     }
 }
@@ -227,6 +236,9 @@ pub enum Error {
 
     #[fail(display = "Manifest file integrity check failed - something has changed")]
     ManifestCheckFail,
+
+    #[fail(display = "File failed verification: {}", 0)]
+    ManifestCheckFileFailed(String, PathBuf),
 }
 
 impl From<std::io::Error> for Error {

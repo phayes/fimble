@@ -23,7 +23,7 @@ fimble view-manifest known_good.fimble_manifest
 
 # Some time passes, possibly bad things happen...
 
-# Check the current system against the manifest to ensure nothing has changed
+# Check the current system against the manifest to ensure nothing has changed. This is very fast.
 fimble check-manifest known_good.fimble_manifest
 ```
 

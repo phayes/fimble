@@ -35,9 +35,10 @@ To create a manifest, fimble creates a space-efficient bloom-filter. This is fai
 
 To check the current status of a system, fimble takes a two step process:
   1. First fimble does a quick-check, computing the blake3 digest of the system and checking this against the master digest in the manifest. If no digest mismatch is found, then we know the system is unaltered and we are done.
-  2. If there is a mismatch, fimble utilizes the bloom-filter in the manifest to pinpoint the location of the difference.
+  2. If there is a digest mismatch, fimble does an in-depth analysis to see where the differences are.
   
-## Caveats
+## Gotchas and solutions
 
-1. Fimble can only find the "first" instance of a file changing. This limitation is due to using a space-efficient bloom-filter. TODO: Fix this?
-2. Fimble can't know if there were changes to serial or block devices.
+1. If the manifest file is too large for your liking, you don't need to use it. Instead just run `fimble hash /my/path` and check the resulting digest against a known good digest. The downside is that you will need to manually determine what has changed if there is a digest mismatch.
+
+2. Fimble doesn't detect internal changes to serial or block devices, although it does detect additions, removals and permission changes for devices.

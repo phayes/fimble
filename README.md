@@ -2,11 +2,11 @@
 
 WORK IN PROGRESS
 
-Simple command-line [File Integrity Monitoring](https://en.wikipedia.org/wiki/File_integrity_monitoring)
+Command-line cryptographically-secure [File Integrity Monitoring](https://en.wikipedia.org/wiki/File_integrity_monitoring)
 
 Fimble lets you ensure the integrity of key files and directories to ensure that they haven't changed. It does this by computing a cryptographically secure digest of a known good state, then comparing the current state against this known good state. 
 
-Fimble aims to be **very fast**, and can do a file-integrity check of the source code of the linux kernel in about two second with a warm disk cache.
+Fimble aims to be **very fast**, and can do a file-integrity check of the source code of the linux kernel in about two second with a warm disk cache. Despite being very fast, it doesn't take shortcuts and fully hashes all files and file attributes every time.
 
 ## Usage
 
@@ -29,7 +29,7 @@ fimble check-manifest known_good.fimble_manifest
 
 ## How it works
 
-Fimble works by computing the [blake3](https://github.com/BLAKE3-team/BLAKE3) cryptographic hash of the specified directories. This is very fast and is done with very little overhead. 
+Fimble works by computing the [blake3](https://github.com/BLAKE3-team/BLAKE3) cryptographic hash of the specified directories.
 
 To create a manifest, fimble creates a space-efficient bloom-filter. This is fairly expensive, but the resulting manifest is small and easy to pass around or check into version control.
 

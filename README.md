@@ -6,7 +6,7 @@ Simple command-line [File Integrity Monitoring](https://en.wikipedia.org/wiki/Fi
 
 Fimble lets you ensure the integrity of key files and directories to ensure that they haven't changed. It does this by computing a cryptographically secure digest of a known good state, then comparing the current state against this known good state. 
 
-Fimble aims to be very fast, and can do a file-integrity check of the source code of the linux kernel in about a second with warm caches.
+Fimble aims to be **very fast**, and can do a file-integrity check of the source code of the linux kernel in about a second with a warm disk cache.
 
 ## Usage
 
@@ -16,14 +16,14 @@ Fimble aims to be very fast, and can do a file-integrity check of the source cod
 fimble hash /var/my/very/sensitive/files
 
 # Create a manifest of a known good state
-fimble create-manifest /var/my/very/sensitive/files /some/other/dir > known_good.fimble_manifest
+fimble build-manifest /var/my/very/sensitive/files > known_good.fimble_manifest
 
 # View the manifest details
 fimble view-manifest known_good.fimble_manifest
 
 # Some time passes, possibly bad things happen...
 
-# Check the current system against the manifest to ensure nothing has changed
+# Check the current system against the manifest to ensure nothing has changed. This is very fast.
 fimble check-manifest known_good.fimble_manifest
 ```
 

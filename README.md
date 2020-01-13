@@ -6,7 +6,7 @@ Simple command-line [File Integrity Monitoring](https://en.wikipedia.org/wiki/Fi
 
 Fimble lets you ensure the integrity of key files and directories to ensure that they haven't changed. It does this by computing a cryptographically secure digest of a known good state, then comparing the current state against this known good state. 
 
-Fimble aims to be **very fast**, and can do a file-integrity check of the source code of the linux kernel in about a second with warm caches.
+Fimble aims to be **very fast**, and can do a file-integrity check of the source code of the linux kernel in about a second with a warm disk cache.
 
 ## Usage
 

@@ -6,7 +6,6 @@ use growable_bloom_filter::GrowableBloom;
 use jwalk::{DirEntry, WalkDir};
 use os_str_bytes::OsStrBytes;
 use serde::{Deserialize, Serialize};
-use serde_hex::{SerHex, Strict};
 use std::fs::File;
 use std::io::prelude::*;
 use std::io::BufReader;
@@ -24,18 +23,29 @@ use std::os::unix::fs::FileTypeExt;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Manifest {
     pub path: String,
-    #[serde(with = "SerHex::<Strict>")]
     pub digest: [u8; 32],
     pub bloom: GrowableBloom,
 }
 
 impl Manifest {
-    pub fn quick_check(&self, digest: &Hash) -> Result<(), Error> {
+    pub fn check_hash(&self, digest: &Hash) -> Result<(), Error> {
         let check_hash: Hash = self.digest.into();
         match check_hash.eq(digest) {
             true => Ok(()),
             false => Err(Error::ManifestCheckFail),
         }
+    }
+
+    pub fn quick_check(&self) -> Result<(), Error> {
+        let walker = WalkDir::new(&self.path).sort(true).preload_metadata(true);
+        let mut hasher = blake3::Hasher::new();
+        for entry in walker {
+            let entry: jwalk::DirEntry = entry?;
+            hash_entry(entry, &mut hasher)?;
+        }
+
+        let digest = hasher.finalize();
+        self.check_hash(&digest)
     }
 
     pub fn scan_check(&self) -> Result<(), Error> {
@@ -76,6 +86,16 @@ impl Scanner {
         for entry in walker {
             let entry: jwalk::DirEntry = entry?;
             hash_entry(entry, &mut hasher)?;
+        }
+
+        Ok(hasher.finalize())
+    }
+
+    pub fn scan_multiple<P: AsRef<Path>>(&self, roots: &[P]) -> Result<Hash, Error> {
+        let mut hasher = blake3::Hasher::new();
+        for path in roots {
+            let digest = self.scan(path)?;
+            hasher.update(digest.as_bytes());
         }
 
         Ok(hasher.finalize())
@@ -235,7 +255,8 @@ mod tests {
 
         let hash = scanner.scan("./test").unwrap();
 
-        manifest.quick_check(&hash).unwrap();
+        manifest.check_hash(&hash).unwrap();
+        manifest.quick_check().unwrap();
         manifest.scan_check().unwrap();
     }
 
@@ -255,7 +276,8 @@ mod tests {
 
         // So far so good - nothig has changed
         let hash = scanner.scan(temp_dir).unwrap();
-        manifest.quick_check(&hash).unwrap();
+        manifest.check_hash(&hash).unwrap();
+        manifest.quick_check().unwrap();
         manifest.scan_check().unwrap();
 
         // Modify a file
@@ -263,7 +285,8 @@ mod tests {
         let hash = scanner.scan(temp_dir).unwrap();
 
         // Assert that both the quick_check and the full scan-check fails
-        assert!(manifest.quick_check(&hash).is_err());
+        assert!(manifest.check_hash(&hash).is_err());
+        assert!(manifest.quick_check().is_err());
         assert!(manifest.scan_check().is_err());
     }
 }

@@ -16,7 +16,7 @@ Fimble aims to be very fast, and can do a file-integrity check of the source cod
 fimble hash /var/my/very/sensitive/files
 
 # Create a manifest of a known good state
-fimble create-manifest /var/my/very/sensitive/files /some/other/dir > known_good.fimble_manifest
+fimble build-manifest /var/my/very/sensitive/files > known_good.fimble_manifest
 
 # View the manifest details
 fimble view-manifest known_good.fimble_manifest

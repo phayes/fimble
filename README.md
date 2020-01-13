@@ -17,7 +17,7 @@ fimble view-manifest known_good.fimble_manifest
 
 # Check the current system against the manifest to ensure nothing has changed
 fimble check-manifest known_good.fimble_manifest
-
+```
 
 ## How it works
 
